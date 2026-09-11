@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#05070c">
+<title>HANDVERSE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{ --bg:#05070c; --panel:rgba(13,17,23,.82); --line:rgba(120,160,255,.18);
+    --azul:#388bfd; --morado:#a371f7; --hueso:#e8eefc; --tenue:#8794ad; }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--hueso);
+    font-family:"DM Sans",system-ui,sans-serif;overflow:hidden;overscroll-behavior:none}
+  button{font-family:inherit;cursor:pointer;border:1px solid var(--line);background:var(--panel);
+    color:var(--hueso);border-radius:10px;padding:10px 14px;font-size:13px}
+  button.active{border-color:var(--azul);color:var(--azul);box-shadow:inset 0 0 16px rgba(56,139,253,.18)}
+  select,input[type=file]{font-family:inherit;background:#0d1117;color:var(--hueso);
+    border:1px solid var(--line);border-radius:8px;padding:6px 8px}
+
+  #videoWrap{position:fixed;inset:0;z-index:0}
+  #videoWrap video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  #videoWrap video.mirrored{transform:scaleX(-1)}
+  #three{position:fixed;inset:0;width:100%;height:100%;z-index:1}
+  #debug{position:fixed;inset:0;width:100%;height:100%;z-index:2;pointer-events:none}
+
+  #modeSelect{position:fixed;inset:0;z-index:6;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:18px;text-align:center;
+    background:radial-gradient(120% 90% at 50% 10%,rgba(17,26,46,.55) 0%,rgba(5,7,12,.75) 60%)}
+  #modeSelect h1{font-family:"Syne",sans-serif;font-weight:800;font-size:clamp(40px,12vw,72px);margin:0;
+    letter-spacing:-.02em;background:linear-gradient(100deg,#e8eefc 10%,var(--azul) 55%,var(--morado) 95%);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .dim{color:var(--tenue);font-size:12px;line-height:1.5}
+  #modeSelect .buttons{display:flex;gap:14px}
+  #modeSelect button{font-family:"Syne",sans-serif;font-weight:800;font-size:16px;padding:16px 34px;
+    border-radius:16px;border:0;color:#05070c;background:linear-gradient(135deg,var(--azul),var(--morado));
+    box-shadow:0 12px 40px rgba(56,139,253,.32)}
+
+  #hud{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:6;display:flex;
+    flex-direction:column;align-items:center;gap:2px;background:var(--panel);border:1px solid var(--line);
+    border-radius:999px;padding:8px 20px;pointer-events:none}
+  #hudTitle{font-family:"Syne",sans-serif;font-weight:800;letter-spacing:.08em;font-size:13px}
+  #hudSubtitle{font-size:11px;color:var(--tenue)}
+
+  #toolbar{position:fixed;left:0;right:0;bottom:0;z-index:6;padding:12px}
+  .toolbar-row{display:flex;gap:8px;justify-content:center}
+  .panel{position:fixed;left:12px;bottom:84px;z-index:6;width:270px;max-height:64vh;overflow-y:auto;
+    background:var(--panel);backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:14px;
+    padding:14px;display:flex;flex-direction:column;gap:10px;font-size:13px}
+  .panel h3{margin:0 0 4px;font-family:"Syne",sans-serif}
+  .panel label{display:flex;flex-direction:column;gap:4px}
+  .panel .row{flex-direction:row;align-items:center;justify-content:space-between}
+  .row-buttons{display:flex;gap:8px;flex-wrap:wrap}
+  .diag{border-top:1px solid var(--line);padding-top:8px;display:flex;flex-direction:column;gap:3px;
+    font-size:12px;color:var(--tenue)}
+  .diag-hands{display:flex;gap:10px;margin-top:6px}
+  .diag-hand{flex:1;background:rgba(255,255,255,.03);border-radius:8px;padding:6px 8px}
+  .diag-hand b{color:var(--hueso);display:block;margin-bottom:2px}
+
+  #dropzone{border:1.5px dashed var(--line);border-radius:12px;padding:18px 12px;display:flex;
+    flex-direction:column;align-items:center;gap:4px;text-align:center;cursor:pointer;
+    transition:border-color .15s,background .15s}
+  #dropzone span:first-child{font-family:"Syne",sans-serif;font-weight:700}
+  #dropzone:hover,#dropzone.over{border-color:var(--azul);background:rgba(56,139,253,.08)}
+  .panel.wide{width:300px}
+  #assetGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .hv-asset-thumb{position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;
+    border:1px solid var(--line);background:#0d1117}
+  .hv-asset-thumb img{width:100%;height:100%;object-fit:contain}
+  .hv-asset-thumb button{position:absolute;top:2px;right:2px;width:20px;height:20px;padding:0;
+    line-height:1;border-radius:50%;background:rgba(5,7,12,.85);font-size:14px}
+
+  #recPreview{width:100%;border-radius:10px;border:1px solid var(--line)}
+
+  #aviso{position:fixed;left:50%;top:14%;transform:translateX(-50%);z-index:20;max-width:82vw;
+    background:rgba(255,77,109,.12);border:1px solid rgba(255,77,109,.5);color:#ffd9e0;
+    padding:12px 16px;border-radius:12px;font-size:13px;line-height:1.45}
+
+  ::-webkit-scrollbar{width:8px}::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px}
+</style>
+</head>
+<body>
+
+<div id="videoWrap"></div>
+<canvas id="three"></canvas>
+<canvas id="debug"></canvas>
+
+<div id="modeSelect">
+  <h1>HANDVERSE</h1>
+  <p class="dim">Videos interactivos con seguimiento de manos</p>
+  <div class="buttons">
+    <button id="btnHistoria">HISTORIA</button>
+    <button id="btnTotal">TOTAL</button>
+  </div>
+</div>
+
+<div id="hud" hidden>
+  <span id="hudTitle"></span>
+  <span id="hudSubtitle"></span>
+</div>
+
+<div id="toolbar" hidden>
+  <div class="toolbar-row">
+    <button data-panel="camera">CAMERA</button>
+    <button data-panel="assets">ASSETS</button>
+    <button data-panel="record">RECORD</button>
+    <button data-panel="settings">SETTINGS</button>
+  </div>
+
+  <div id="panelCamera" class="panel" hidden>
+    <h3>Cámara</h3>
+    <label>Dispositivo <select id="devSelect"></select></label>
+    <label>Resolución <select id="resSelect"><option value="1080p">1080p</option><option value="720p">720p</option></select></label>
+    <label>FPS <select id="fpsSelect"><option value="30">30</option><option value="60">60</option></select></label>
+    <label class="row">Espejo <input type="checkbox" id="mirrorCheck" checked></label>
+    <div class="row-buttons">
+      <button id="btnCamToggle">Encender/Apagar</button>
+      <button id="btnFullscreen">Pantalla completa</button>
+    </div>
+    <div class="diag">
+      <div>resolución: <span id="diagRes">0×0</span></div>
+      <div>fps tracking: <span id="diagFpsTrack">0</span></div>
+      <div>dispositivo: <span id="diagLabel">—</span></div>
+      <div>estado: <span id="camStatus">idle</span></div>
+      <div class="diag-hands">
+        <div class="diag-hand"><b>Izquierda</b><span id="diagLeft">no detectada</span></div>
+        <div class="diag-hand"><b>Derecha</b><span id="diagRight">no detectada</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="panelAssets" class="panel wide" hidden>
+    <h3>Assets</h3>
+    <p class="dim">Sube imágenes (PNG con transparencia da mejor resultado). Agárralas en cámara con pellizco (pulgar + índice).</p>
+    <div id="dropzone">
+      <span id="dropzoneLabel">+ Añadir imagen</span>
+      <span class="dim">Toca para elegir · o arrastra aquí</span>
+    </div>
+    <input id="fileInput" type="file" accept="image/png,image/jpeg,image/webp" multiple style="display:none">
+    <div id="assetGrid"></div>
+  </div>
+
+  <div id="panelRecord" class="panel" hidden>
+    <h3>Grabar</h3>
+    <p class="dim">Exporta en 1080×1920 (9:16), MP4 si el navegador lo soporta, si no WebM.</p>
+    <div class="row-buttons">
+      <button id="btnRecord">● Grabar</button>
+      <span id="recTimer" class="dim"></span>
+    </div>
+    <video id="recPreview" controls hidden></video>
+    <button id="btnDownload" hidden>Descargar</button>
+  </div>
+
+  <div id="panelSettings" class="panel" hidden>
+    <h3>Ajustes</h3>
+    <label class="row">Overlay de debug (landmarks) <input type="checkbox" id="debugCheck" checked></label>
+    <div class="row-buttons"><button id="btnMenu">Volver al menú</button></div>
+  </div>
+</div>
+
+<div id="aviso" hidden></div>
+
+<script type="module" src="js/ui.js"></script>
+</body>
+</html>
