@@ -45,7 +45,7 @@ async function startCamera(deviceId) {
     await refreshDevices();
     const s = cameraManager.settings();
     state.diag.w = s?.width || 0; state.diag.h = s?.height || 0; state.diag.label = cameraManager.label();
-    $('#camStatus').textContent = 'live';
+    $('#camStatus').textContent = 'en vivo';
   } catch (err) {
     state.cameraStatus = 'error';
     $('#camStatus').textContent = 'error';
@@ -82,11 +82,11 @@ function enterMode(mode) {
   if (state.mode === 'historia') Historia.unmount();
   if (state.mode === 'total') Total.unmount();
   state.mode = mode;
-  $('#modeSelect').hidden = mode !== 'menu';
-  $('#hud').hidden = mode === 'menu';
-  $('#toolbar').hidden = mode === 'menu';
-  if (mode === 'historia') { Historia.mount(scene); $('#hudTitle').textContent = 'HISTORIA'; }
-  if (mode === 'total') { Total.mount(scene); $('#hudTitle').textContent = 'TOTAL'; $('#hudSubtitle').textContent = 'Sube una imagen en ASSETS y pellizca para agarrarla'; }
+  $('#btnHistoria').classList.toggle('active', mode === 'historia');
+  $('#btnTotal').classList.toggle('active', mode === 'total');
+  if (mode === 'historia') { Historia.mount(scene); $('#modeSubtitle').textContent = 'Cierra el puño para desarmar · abre la mano para la siguiente'; }
+  else if (mode === 'total') { Total.mount(scene); $('#modeSubtitle').textContent = 'Sube la mano desde el estante · junta y abre ambos puños para combinar'; }
+  else { $('#modeSubtitle').textContent = ''; }
   ensureTracking();
 }
 
@@ -139,24 +139,40 @@ function updateDiagnostics() {
 }
 
 // ---------------- Assets panel ----------------
-function renderAssetGrid(list) {
-  const grid = $('#assetGrid');
+function renderComponents(list) {
+  const grid = $('#compGrid');
   grid.innerHTML = '';
   list.forEach((a) => {
     const div = document.createElement('div');
     div.className = 'hv-asset-thumb';
     div.innerHTML = `<img src="${a.originalUrl}" alt="${a.name}"><button title="Quitar">×</button>`;
-    div.querySelector('button').onclick = () => Total.removeAsset(a.id);
+    div.querySelector('button').onclick = () => Total.removeComponent(a.id);
     grid.appendChild(div);
   });
 }
-Total.onAssetsChange(renderAssetGrid);
+function renderResult(asset) {
+  const grid = $('#resultPreview');
+  grid.innerHTML = '';
+  if (!asset) return;
+  const div = document.createElement('div');
+  div.className = 'hv-asset-thumb';
+  div.innerHTML = `<img src="${asset.originalUrl}" alt="${asset.name}"><button title="Quitar">×</button>`;
+  div.querySelector('button').onclick = () => Total.clearResult();
+  grid.appendChild(div);
+}
+Total.onAssetsChange(({ components, resultAsset }) => { renderComponents(components); renderResult(resultAsset); });
 
-async function handleFiles(files) {
+async function handleComponentFiles(files) {
   if (!files || !files.length) return;
-  $('#dropzoneLabel').textContent = 'Procesando…';
-  await Total.addFiles(files);
-  $('#dropzoneLabel').textContent = '+ Añadir imagen';
+  $('#dropzoneCompLabel').textContent = 'Procesando…';
+  await Total.addComponentFiles(files);
+  $('#dropzoneCompLabel').textContent = '+ Añadir imagen';
+}
+async function handleResultFile(files) {
+  if (!files || !files.length) return;
+  $('#dropzoneResultLabel').textContent = 'Procesando…';
+  await Total.setResultFile(files);
+  $('#dropzoneResultLabel').textContent = '+ Elegir imagen final';
 }
 
 // ---------------- Grabación ----------------
@@ -237,14 +253,21 @@ function wire() {
   $('#fpsSelect').onchange = (e) => { state.targetFps = Number(e.target.value); startCamera($('#devSelect').value); };
   $('#mirrorCheck').onchange = (e) => { state.mirror = e.target.checked; applyMirror(); };
   $('#btnFullscreen').onclick = () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {}); else document.exitFullscreen().catch(() => {}); };
-  $('#btnCamToggle').onclick = () => { if (state.cameraStatus === 'live') { cameraManager.stop(); state.cameraStatus = 'idle'; $('#camStatus').textContent = 'idle'; } else startCamera($('#devSelect').value); };
+  $('#btnCamToggle').onclick = () => { if (state.cameraStatus === 'live') { cameraManager.stop(); state.cameraStatus = 'idle'; $('#camStatus').textContent = 'inactiva'; } else startCamera($('#devSelect').value); };
 
-  const dropzone = $('#dropzone');
-  dropzone.onclick = () => $('#fileInput').click();
-  dropzone.ondragover = (e) => { e.preventDefault(); dropzone.classList.add('over'); };
-  dropzone.ondragleave = () => dropzone.classList.remove('over');
-  dropzone.ondrop = (e) => { e.preventDefault(); dropzone.classList.remove('over'); handleFiles(e.dataTransfer.files); };
-  $('#fileInput').onchange = (e) => { handleFiles(e.target.files); e.target.value = ''; };
+  const dropzoneComp = $('#dropzoneComp');
+  dropzoneComp.onclick = () => $('#fileInputComp').click();
+  dropzoneComp.ondragover = (e) => { e.preventDefault(); dropzoneComp.classList.add('over'); };
+  dropzoneComp.ondragleave = () => dropzoneComp.classList.remove('over');
+  dropzoneComp.ondrop = (e) => { e.preventDefault(); dropzoneComp.classList.remove('over'); handleComponentFiles(e.dataTransfer.files); };
+  $('#fileInputComp').onchange = (e) => { handleComponentFiles(e.target.files); e.target.value = ''; };
+
+  const dropzoneResult = $('#dropzoneResult');
+  dropzoneResult.onclick = () => $('#fileInputResult').click();
+  dropzoneResult.ondragover = (e) => { e.preventDefault(); dropzoneResult.classList.add('over'); };
+  dropzoneResult.ondragleave = () => dropzoneResult.classList.remove('over');
+  dropzoneResult.ondrop = (e) => { e.preventDefault(); dropzoneResult.classList.remove('over'); handleResultFile(e.dataTransfer.files); };
+  $('#fileInputResult').onchange = (e) => { handleResultFile(e.target.files); e.target.value = ''; };
 
   $('#btnRecord').onclick = () => { if (state.isRecording) stopRecording(); else startRecording(); };
   $('#debugCheck').onchange = (e) => { state.debugOverlay = e.target.checked; };

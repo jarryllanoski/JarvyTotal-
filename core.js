@@ -146,7 +146,7 @@ export class GestureDetector {
   constructor() { this.listeners = new Map(); this.tracks = new Map(); this.twoHand = null; }
   on(evt, cb) { let s = this.listeners.get(evt); if (!s) { s = new Set(); this.listeners.set(evt, s); } s.add(cb); return () => s.delete(cb); }
   emit(evt, p) { this.listeners.get(evt)?.forEach((cb) => cb(p)); }
-  _track(h) { let t = this.tracks.get(h); if (!t) { t = { pinching: false, fist: false, lastX: null, cd: 0 }; this.tracks.set(h, t); } return t; }
+  _track(h) { let t = this.tracks.get(h); if (!t) { t = { pinching: false, fist: false, lastX: null, lastY: null, cdX: 0, cdY: 0 }; this.tracks.set(h, t); } return t; }
   update(hands, dt) {
     const states = hands.map((h) => this._updateHand(h, dt));
     let twoHanded = null, palmDist = null;
@@ -178,16 +178,33 @@ export class GestureDetector {
     const palm = palmCenter(lm);
     if (t.lastX !== null) {
       const vx = (palm.x - t.lastX) / Math.max(dt, 1 / 120);
-      t.cd = Math.max(0, t.cd - dt);
-      if (t.cd === 0 && Math.abs(vx) > SWIPE_V) { t.cd = SWIPE_CD; this.emit(vx > 0 ? 'swipeRight' : 'swipeLeft', { handedness: h.handedness }); }
+      t.cdX = Math.max(0, t.cdX - dt);
+      if (t.cdX === 0 && Math.abs(vx) > SWIPE_V) { t.cdX = SWIPE_CD; this.emit(vx > 0 ? 'swipeRight' : 'swipeLeft', { handedness: h.handedness }); }
     }
     t.lastX = palm.x;
+    if (t.lastY !== null) {
+      const vy = (palm.y - t.lastY) / Math.max(dt, 1 / 120); // y crece hacia abajo en coords de imagen
+      t.cdY = Math.max(0, t.cdY - dt);
+      // solo cuenta si arranca en la zona baja de la imagen (el "estante" de abajo) y sube rápido
+      if (t.cdY === 0 && palm.y > 0.55 && vy < -SWIPE_V) {
+        t.cdY = SWIPE_CD;
+        this.emit('swipeUp', { handedness: h.handedness, x: palm.x, y: palm.y });
+      }
+    }
+    t.lastY = palm.y;
     let gesture = 'NONE';
     if (t.fist) gesture = 'CLOSED_FIST'; else if (t.pinching) gesture = 'PINCH'; else if (openness > 0.75) gesture = 'OPEN_PALM';
     return { handedness: h.handedness, gesture, pinchDistance: pd, openness };
   }
 }
 export const gestureDetector = new GestureDetector();
+
+// Reenvía cada evento del detector como CustomEvent de window, así los
+// módulos de escena (historia.js, total.js) pueden escucharlos sin
+// importar el detector directamente.
+['pinchStart', 'pinchEnd', 'grab', 'release', 'swipeLeft', 'swipeRight', 'swipeUp', 'handsTogether', 'handsApart'].forEach((evt) => {
+  gestureDetector.on(evt, (detail) => window.dispatchEvent(new CustomEvent('hv:' + evt, { detail })));
+});
 
 let lastTime = performance.now();
 Bus.on('hands', ({ hands, fps }) => {
